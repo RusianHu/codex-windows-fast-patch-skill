@@ -511,7 +511,7 @@ It starts the plugin's own cua_repl server over stdio with `CUA_REPL_ENABLED_SUR
 Symptoms:
 
 - After the surface lock is repaired, `Object.keys(cua)` contains `computer`, `getApp`, and `listApps`, yet a Computer Use test still ends in failure.
-- `cua.getApp("Notepad++")` rejects with `Native app bindings are unavailable for windows.`, and `cua.listApps()` rejects with the same text.
+- `cua.getApp("<app>")` rejects with `Native app bindings are unavailable for windows.`, and `cua.listApps()` rejects with the same text.
 - The conversation then reports native Windows app control as unavailable, even though `cua.getState()` enumerates real applications and windows and `cua.computer.list_windows()` returns real windows.
 
 Root cause, read from the shipped runtime and then reproduced:
