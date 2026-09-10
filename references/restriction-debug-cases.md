@@ -453,23 +453,133 @@ Action:
 
 Symptoms:
 
-- `cua.getState()` succeeds and enumerates the Codex in-app browser, but every native-app call fails at the language level: `cua.getApp is not a function`, `cua.listApps is not a function`.
+- `cua.getState()` succeeds and enumerates the Codex in-app browser, but native-app calls fail at the language level: `cua.getApp is not a function`, `cua.listApps is not a function`.
 - `Object.keys(cua)` lists only browser members (`initialize, getState, browsers, getBrowser, createBrowserTab, getTab, listBrowsers, listTabs`) with no `computer`, `getApp`, or `listApps`, so the conversation concludes that native app control is unavailable on Windows.
 - `scripts\install-computer-use-local.ps1 -StrictVerifyOnly` passes, the `codex-computer-use-*` named pipe exists, and the Desktop settings gates are open.
+- The symptom reappeared after a Desktop restart on a machine whose previous repair had edited the materialized `.mcp.json` successfully. A recurrence of this shape belongs to this case rather than to a failed repair.
+
+Root cause, read from the shipped bundle and then reproduced:
+
+- The Desktop startup reconcile (`Ys` -> `Qo` -> `Gi` in the extracted `app.asar`, `.vite\build\main-*.js`) computes the surface list and rewrites the materialized `plugins\cache\openai-bundled\unified-computer-use\<version>\.mcp.json` in full whenever the serialized result differs from the file on disk. `CUA_REPL_ENABLED_SURFACES` is written from that computed list.
+- The list is built as `h=[]; f&&d.length>0&&h.push('browser'), p&&h.push('computer')`, and `p` additionally requires `platform === 'darwin'`. With that expression no input on Windows produces the `computer` entry, so the reconcile writes `browser` and an edit to the file does not survive a restart.
+- `CODEX_ELECTRON_ENABLE_WINDOWS_COMPUTER_USE=1` does not change the list: it only forces the `computerUse` / `computerUseNodeRepl` feature flags, and the surface push does not read them.
+- `Gi` writes only `.mcp.json`. `scripts\launch.mjs` is not on that write path, which is what makes it the durable repair target.
+
+Evidence:
+
+- Two Desktop restarts on the recorded build rewrote `.mcp.json` seconds after the process started (mtimes 14:46:03 and 17:04:03 against process starts at 14:45:50 and 17:04:0x, with `config.toml` written in the same second). A backup taken from the file before the second restore contains `"CUA_REPL_ENABLED_SURFACES": "browser"`.
+- Across both restarts `scripts\launch.mjs` and `resources\computer-description.md` kept their patch-time mtimes, so the reconcile does not rewrite them.
+
+Evidence boundary:
+
+- The rewritten value and the rewrite cadence are established for the recorded build. Which clause is responsible for excluding `computer`, and whether the Windows exclusion is intentional, is not established here; the repair forces the surface in `scripts\launch.mjs` instead of trying to reason about the exclusion.
+- "The plugin cache is re-materialized only when the plugin version changes" is an inference from the recorded materialization and restarts, not a documented contract. Treat any re-materialization as a reset and re-run the verification.
 
 Checks:
 
-- Read the effective plugin cache file at `plugins\cache\openai-bundled\unified-computer-use\<version>\.mcp.json` under the Codex home. `scripts\launch.mjs` defaults `CUA_REPL_ENABLED_SURFACES` to `browser,computer`, but the materialized cache carries the Desktop-written value `browser`, and the cua_repl server builds its whole API surface from that variable before the first call.
+- Read the effective plugin cache file at `plugins\cache\openai-bundled\unified-computer-use\<version>\.mcp.json` under the Codex home.
 - Confirm the pipe first (`\\.\pipe\codex-computer-use-*`). A live pipe plus object-level missing methods points at the surface lock; a missing pipe still belongs to the gate/transport workflows.
+- Compare the `.mcp.json` mtime with the Desktop process start time. A rewrite seconds after start, with a `config.toml` mtime in the same second, matches the startup reconcile pass and explains why a manual edit does not hold.
 - Distinguish this from the Windows 10 `0x80004002` screenshot backend, the cross-call `node_repl exec context not found` case, and the surface-independent observation that a real Chrome tab captures fine while an in-app-browser tab can hang `getAXState`/`getScreenshot` until the js timeout. That in-app-browser channel is a separate Desktop-frontend behaviour: fall back to driving Chrome for browser-side captures and do not fold it into this repair.
 - Do not read `computer-use@openai-bundled` (skill and docs plugin) as the surface owner; the unified-computer-use plugin contributes the cua_repl server whose env decides the surface set.
 
 Action:
 
-- Back up the cache `.mcp.json`, then change `"CUA_REPL_ENABLED_SURFACES": "browser"` to `"browser,computer"` in the `cua_repl` `env` table.
+- Run the repair, which patches both the surface list and the injected description (see the next case for the second patch):
+
+```powershell
+$surfaceRepair = "$SkillRoot\scripts\repair-cua-surface-lock.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File $surfaceRepair -VerifyOnly
+powershell -NoProfile -ExecutionPolicy Bypass -File $surfaceRepair -Install
+```
+
+- The repair appends `"computer"` to the parsed surface set inside `scripts\launch.mjs` for the versioned cache copy and both marketplace source copies, so the forced surface survives a Desktop restart. It normalizes the materialized `.mcp.json` as well, so a conversation started in the already-running Desktop picks the surface up without a restart. Every edited file is backed up as an adjacent `<name>.bak-*`; each profile is reported as `patched`, `original-patchable`, or `unsupported`; a file whose anchor no longer matches is reported and left untouched. `-VerifyOnly` is the gate, `-Json` and the default report never write, and `-Rollback` restores from the adjacent backup.
+- Do not reach for the MSIX repatch for this symptom. Correcting the surface list in Desktop's own bundle is possible (change `p&&h.push(\`computer\`)` to `(p||m)&&h.push(\`computer\`)` in the extracted main bundle), and that survives a plugin re-sync, but it does not survive the Desktop upgrade that replaces the bundle and it costs a full repack, resign, and reinstall. The `launch.mjs` repair is the lower-disruption path and only needs re-application after a plugin cache re-materialization.
 - Start a fresh conversation afterwards so a new cua_repl server process reads the new environment; an existing conversation keeps its old server process and will still miss the methods.
-- Require all three verification signals: `Object.keys(cua)` now contains `computer`, `getApp`, and `listApps`; `getState()` lists real running applications; and one native window binding plus capture succeeds against a controlled window.
-- Expect Desktop upgrades and plugin re-syncs to re-materialize this file. Re-check the value after every Desktop update before escalating to heavier workflows, and re-apply after any plugin cache refresh that restores the file from the marketplace copy.
+- Require three signals: `Object.keys(cua)` contains `computer`, `getApp`, and `listApps`; `getState()` enumerates real running applications; and one real native window operation succeeds. On Windows that third signal has to come from `cua.computer.*`, because the App-object API cannot supply it — see the next case for why, and do not read its rejection as a failed repair.
+- Cheap independent acceptance, usable when no Desktop JavaScript kernel is in scope:
+
+```powershell
+python "$SkillRoot\scripts\probe-cua-surface.py"
+```
+
+It starts the plugin's own cua_repl server over stdio with `CUA_REPL_ENABLED_SURFACES` forced back to `browser`, consumes the banner with one `js` call, then reads the injected tool description, `Object.keys(cua)`, and the window inventory from a live kernel. Seeing `computer`, `getApp`, and `listApps` under a `browser`-valued environment is what shows the forced surface no longer depends on the file the reconcile rewrites; it exits non-zero when a required member is missing. Call it from an external executor, not from the conversation under repair, because the surface is read once per cua_repl process.
+- This repair is scoped to the builds it was verified on and to the anchors it records; re-run `-VerifyOnly` after a Desktop update rather than assuming it still applies. The re-application case below covers what to do with each possible report.
+
+## Windows Native App Bindings Are macOS-Only, So The Injected Description Misleads The Model
+
+Symptoms:
+
+- After the surface lock is repaired, `Object.keys(cua)` contains `computer`, `getApp`, and `listApps`, yet a Computer Use test still ends in failure.
+- `cua.getApp("Notepad++")` rejects with `Native app bindings are unavailable for windows.`, and `cua.listApps()` rejects with the same text.
+- The conversation then reports native Windows app control as unavailable, even though `cua.getState()` enumerates real applications and windows and `cua.computer.list_windows()` returns real windows.
+
+Root cause, read from the shipped runtime and then reproduced:
+
+- `@oai/cua`'s `tinysky_alt` implementation gates both methods on the platform the native service reports: `getApp` and `listApps` throw unless `sky.target === "mac"`. On Windows the service reports `"windows"` (confirm with `cua.computer.target`), so both reject unconditionally. The rejection comes from the shipped JavaScript, so it is not evidence of a configuration, cache, or permission problem.
+- `computer` is therefore a partial surface on Windows. The native API that does work is the window-based one exposed on `cua.computer`, backed by `@oai/sky`'s `WindowsComputerUseClientBase`: `list_apps`, `list_windows`, `get_window`, `activate_window`, `get_window_state`, `launch_app`, `click`, `scroll`, `drag`, `press_key`, `type_text`, `set_value`, `perform_secondary_action`, and `start_audio_recording` / `stop_audio_recording`.
+- The blocked hop is the injected tool description, not the runtime. `resources/computer-description.md` is appended to the `js` tool description by `scripts\launch.mjs`, and on the recorded build it documents one native entry point only: the macOS `cua.getApp` call. It never mentions `cua.computer.*`. A Windows conversation follows it, calls `cua.getApp`, receives the rejection above, and reports native control as unavailable.
+
+Evidence:
+
+- Reproduced from a live kernel started with the plugin's own environment: `cua.computer.target` is `windows`, `list_apps()` and `list_windows()` return 40 applications and 7-8 windows, and `get_window_state({ window, include_screenshot: true, include_text: true })` returns a real accessibility tree for a controlled window.
+- Reproduced inside Desktop on the recorded build: a fresh conversation listed windows, activated a browser window, scrolled the page, read the screenshot, and restored the position with `Ctrl+Home`, after first hitting the `cua.getApp` rejection.
+
+Evidence boundary:
+
+- The method list and the `{ app, id }` payload requirement are read from the shipped client definition. `activate_window` and `get_window_state` were exercised; the remaining methods were not called here, so treat them as declared rather than as verified.
+- The external probe answers the approval elicitation with a local stub. The real Desktop approval dialog was exercised only by the in-Desktop conversation.
+- Whether the macOS-only gate is intentional is not established here. The documented fix is the description, so a Windows conversation stops choosing the entry point that cannot work.
+
+Checks:
+
+- Read `cua.computer.target` from a live kernel. `"windows"` puts the case in scope; another value means it does not apply.
+- Read `resources/computer-description.md` in the plugin cache. Without the `CUA_WINDOWS_DESCRIPTION_PATCH` marker the model is still being pointed at the macOS-only entry point.
+- Distinguish the two `get_window_state` result shapes: Windows returns `{ accessibility, screenshots, window }`, not the macOS `{ text, screenshot }`. Reading `s.text` / `s.screenshot` on Windows yields `undefined`, which is a probe bug rather than a runtime failure.
+- Pass the complete `{ app, id }` object from `list_windows()` or `list_apps()` to window-scoped calls. `{ id }` alone is rejected with `window.app must be a non-empty string and window.id must be an integer >= 0` (observed on `activate_window` and `get_window_state`).
+- Expect an approval elicitation on the first call that targets an app (`Allow Codex to use <app>`, observed for `explorer.exe`). An external probe has to declare the `elicitation` client capability and answer `elicitation/create` with `{"action":"accept","content":{}}`, otherwise the helper fails with `nodeRepl.createElicitation is unavailable because the MCP client does not support form elicitation`; that error describes the probe, not the product.
+- Do not attribute in-app-browser `iab` capture timeouts to this case. `getAXState` / `getScreenshot` on an in-app-browser tab can hang until the js timeout; drive Chrome instead.
+
+Action:
+
+- Run the same repair, which patches the description in addition to the surface list:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\repair-cua-surface-lock.ps1" -VerifyOnly
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\repair-cua-surface-lock.ps1" -Install
+```
+
+The patch replaces the single macOS example with a platform branch: the model reads `cua.computer.target` first, keeps `cua.getApp` for `"mac"`, and for `"windows"` gets the `list_windows` / `activate_window` / `get_window_state` sequence, the helper-method list, the `{ app, id }` requirement, the Windows return shape, and the per-app approval expectation.
+
+- Start a fresh conversation so a new cua_repl process reads the patched description; the description is read once at server start.
+- Accept a real Windows operation as the signal: `scripts\probe-cua-surface.py` reports `windows guidance present` plus a `windows api` line of `<target>/<n>` with `n > 0`, and a live conversation can list windows and read a window's accessibility state.
+- Record the rejection as a property of the App-object API on Windows in the conclusion, and report native control as working through the window API, rather than reporting native control as unavailable.
+
+## Re-applying The Computer Use Cache Repair After A Desktop Upgrade
+
+Both repairs edit files inside the plugin cache, so the question is which events rewrite that cache. Recorded on Desktop `26.903.8094.0` with `unified-computer-use` `26.903.61454`:
+
+- Same-version Desktop restarts left both patched files alone. Two restarts rewrote `.mcp.json` (see the evidence in the surface lock case) while `scripts\launch.mjs` and `resources\computer-description.md` kept their patch-time mtimes, which is consistent with the reconcile writing only `.mcp.json`.
+- The cache copy is populated from the marketplace source, so a re-materialization restores the shipped version of both files and of both source copies together. In practice that is a Desktop upgrade that moves the plugin version directory, plus any manual cache rebuild.
+
+This means the `.mcp.json` value is not a health indicator: `browser` there is the expected result of a Desktop start. Judge health with `-VerifyOnly`, which reads the two patched files.
+
+So the answer to "do I have to re-adapt after every Desktop update" is: re-apply, not re-adapt. While the report says `original-patchable`, no analysis is needed:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\repair-cua-surface-lock.ps1" -VerifyOnly
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\repair-cua-surface-lock.ps1" -Install
+```
+
+Run `-Install` only when `-VerifyOnly` fails. The repair globs every `unified-computer-use\<version>` directory, so a plugin version bump needs no edit to the script.
+
+When `-VerifyOnly` reports `unsupported` for a profile, the shipped file changed shape and needs reading before anything is written:
+
+- Read the shipped file first. A build that stops excluding `computer` on Windows, or a description that already documents `cua.computer.*`, needs no patch at all; leave the file alone and treat that profile as satisfied.
+- The surface patch stays correct if the exclusion is fixed: appending `"computer"` to a set that already contains it is a no-op, so an already-correct file reports `unsupported` and is left untouched.
+- Only re-derive the anchor when the shipped file still needs the patch but no longer matches the recorded one, and never widen the pattern to force a match on a file whose new shape has not been read.
+
+The cache-level repair is preferred over patching Desktop's bundle for the reasons given in the surface lock case; it is the version-agnostic path, and it is the one that a re-run of `-VerifyOnly` keeps honest.
 
 ## Third-Party Config Rewriter Removes Computer Use Features And Plugin Sections
 
