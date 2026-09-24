@@ -535,7 +535,9 @@ It starts the plugin's own cua_repl server over stdio with `CUA_REPL_ENABLED_SUR
 Run `test-cua-surface-lock-patterns.ps1` and `python scripts/test-probe-cua-surface.py` for offline regression coverage. Descriptor-only plugin layouts without the required launcher/resources are unsupported and must remain untouched; do not treat that rejection as permission to install optional plugins or repack Desktop.
 - This repair is scoped to the builds it was verified on and to the anchors it records; re-run `-VerifyOnly` after a Desktop update rather than assuming it still applies. The re-application case below covers what to do with each possible report.
 
-## Windows Native App Bindings Are macOS-Only, So The Injected Description Misleads The Model
+## Legacy Windows Native App Bindings Were macOS-Only
+
+Version boundary: this case records the older `@oai/cua` runtime that threw `Native app bindings are unavailable for windows.` on `cua.getApp` and `cua.listApps`. The `@oai/cua 0.2.5` bundled with Desktop `26.917.9434.0` has a Windows branch in `tinysky_alt/create_tinysky_alt.js`. Its documentation and source support `cua.listWindows()`, `cua.listApps()`, and `cua.getApp({ windowId: <real window ID> })`. The string form of `getApp` remains the macOS form. Check the installed runtime before applying this legacy description repair; the current descriptor-only plugin has no `scripts/launch.mjs` target for it. Source inspection establishes API shape, while a fresh Desktop window capture after restoring the ASAR surface gate is still required for runtime acceptance.
 
 Symptoms:
 
