@@ -793,3 +793,19 @@ The full or surface-only dry run can report `expected exactly one Windows CUA su
 Accept the separate modern layout only when the exact shared readiness predicate is present once. It requires `browserUseTinysky`, a non-WSL runtime, both Node executable paths, `mcpToolExposure`, and an installed, enabled, available unified CUA plugin. Preserve that readiness value plus `computerUse` on Windows; preserve the service-app checks on Darwin. Older layouts still require their existing `computerUseNodeRepl` property. Do not remove readiness checks or rewrite generated `.mcp.json` to compensate.
 
 The surface fixture suite covers 304 modern platform/readiness combinations plus the existing 120 legacy combinations, idempotency, corrupt or duplicate readiness anchors, target selection, and unchanged refusal of partial or ambiguous patches. Full dry-run, signing and installation were validated against the new package. After relaunch, the generated surface list was `browser,computer`; the live `cua.listWindows()` and window-bound `cua.getApp({windowId})` path returned Explorer accessibility text and an inspected screenshot. Chrome and the in-app browser both read the expected title and single heading from a controlled page through the official browser runtime.
+
+## CUA Requests Time Out After Proxy Variables Are Removed
+
+On Desktop `26.915.4065.0`, native app enumeration can work and Chrome can connect while tab creation or listing fails with `nodeRepl.fetch request failed`. Compare the actual `cua_repl` child process environment with its app-server parent. Checking `codex-computer-use-swift.exe` alone does not test the process that performs the request.
+
+The Node REPL config builder replaces `env_vars` during Desktop reconciliation. A manual edit to the materialized plugin manifest or `config.toml` can therefore disappear on restart. The repair adds the existing standard HTTP/HTTPS/ALL/NO proxy variable names to the Windows native builder, preserving existing entries and deduplicating them. Unset variables, credentials under other names, macOS, Linux, and WSL paths are left unchanged. Proxy values are inherited at launch and are never embedded in the bundle.
+
+Run `scripts/test-node-repl-proxy-env.cjs`, then a full dry run. After installing the updated MSIX from an external executor, verify the real CUA child environment and a controlled browser tab. Restarting only its JavaScript kernel does not restart the MCP process.
+
+## Windows CUA Entry Instructions Use an Unsupported App Name
+
+The current runtime can ship `instructions/windows/computer.md` with the macOS-style `cua.getApp("Example App")` example. Windows requires `cua.listWindows()` followed by `cua.getApp({ windowId })`. `scripts/lib/windows-cua-runtime.ps1` corrects only that exact old text, preserves already-correct instructions, and refuses an unknown shape. The local repair saves the original instructions under the Codex backup directory; full MSIX repair also updates the staged copy. A screenshot acceptance must raise the selected window and compare the visible content with its accessibility tree.
+
+## Signing Certificate Provider Is Missing
+
+A clean Windows PowerShell host can lack the `Cert:` provider even though an existing signing certificate is present. The patcher enumerates `CurrentUser/My` through `X509Store` before invoking certificate creation. It still requires matching subject, a private key, valid expiry, and the code-signing usage. A successful package build must pass signature verification and package inspection before installation.
