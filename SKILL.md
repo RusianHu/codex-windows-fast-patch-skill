@@ -445,6 +445,8 @@ The mode requires exactly one content-matched `.vite\build` target and one occur
 
 Fixture success and an installed-package dry run do not establish real Desktop acceptance. After relaunch, inspect `Object.keys(cua)` in a fresh conversation, enumerate windows, and capture one approved window with visible content. On `@oai/cua` 0.2.5, use `cua.listWindows()` and `cua.getApp({ windowId: <real id> })`; the lower-level `cua.computer.list_windows()` / `get_window_state({ window, include_screenshot: true, include_text: true })` path remains available. A string argument to `getApp` is the macOS form. Record approval UI, screenshot content, accessibility, and a benign input separately.
 
+On Windows, the high-level bound `getScreenshot()` can reject a window with `multiple screenshot regions; a single screenshot is unavailable`. Desktop 26.917.9434.0 returned two regions for an Explorer window while the lower-level `cua.computer.get_window_state()` returned both visible screenshots and accessibility state. Inspect the `screenshots[]` regions and the intended window content rather than treating the high-level single-image error as native Computer Use failure. If Sky reports concurrent user input in the window, stop input instead of overriding the user.
+
 ## Useful Wrapper Options
 
 - `-DryRun`: verify bundle targets only; no install. Unless `-KeepBuild` is supplied, the wrapper asks the patcher to clean its copied build root after a successful patch stage. Cleanup is best-effort, so inspect the reported path when zero residual data is required; a later wrapper verification can still fail after the patcher has already cleaned its own build root.
