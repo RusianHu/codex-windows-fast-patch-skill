@@ -14,6 +14,7 @@ param(
   [switch]$RegisterMarketplaceOnly,
   [switch]$ForceRebuild,
   [string]$OutputRoot,
+  [string[]]$CustomModels,
   [switch]$InstallModelInstructionsFile,
   [string]$ModelInstructionsSource,
   [string]$ModelInstructionsDestination = (Join-Path $env:USERPROFILE '.codex\prompts\system-prompt.md')
@@ -490,6 +491,9 @@ if (-not (Test-Path -LiteralPath $PatchScript)) {
 }
 
 $patchArgs = @()
+if ($PSBoundParameters.ContainsKey('CustomModels')) {
+  $patchArgs += @('-CustomModels', ($CustomModels -join ','))
+}
 if ($PatchWindows10ScreenshotHelper) {
   $patchArgs += '-PatchWindows10ScreenshotHelper'
 }

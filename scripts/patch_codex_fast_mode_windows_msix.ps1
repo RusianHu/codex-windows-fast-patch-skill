@@ -12,7 +12,7 @@ param(
   [switch]$AddLocalPluginMarketplace,
   [string]$LocalPluginMarketplaceSource = (Join-Path $env:USERPROFILE '.codex\.tmp\plugins'),
   [string]$LocalPluginMarketplaceName = 'openai-curated-local',
-  [string[]]$CustomModels = @('gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'),
+  [string[]]$CustomModels = @('gpt-6-astra', 'gpt-6-sol', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'),
   [switch]$VerifyFastModeRequest,
   [switch]$OnlyBundledMarketplaceCopy,
   [switch]$OnlyComputerUseSurface,
@@ -789,7 +789,7 @@ process.stdout.write('patched');
   Set-Content -LiteralPath $customModelsPatcherPath -Encoding UTF8 -Value @'
 const fs = require('node:fs');
 const file = process.argv[2];
-const models = [...new Set(process.argv.slice(3).filter(Boolean))];
+const models = [...new Set(process.argv.slice(3).flatMap(value => value.split(',')).map(value => value.trim()).filter(Boolean))];
 if (models.length === 0) {
   process.stderr.write('custom-model-list-empty\n');
   process.exit(2);
@@ -797,8 +797,25 @@ if (models.length === 0) {
 
 const marker = 'CODEX_CUSTOM_MODELS_V1';
 const text = fs.readFileSync(file, 'utf8');
-if (text.includes(marker) && models.every((model) => text.includes(model))) {
-  process.stdout.write('already-patched');
+if (text.includes(marker)) {
+  const lists = [...text.matchAll(/\/\*CODEX_CUSTOM_MODELS_V1\*\/(\[[^\]\r\n]*\])\.includes\(([$A-Za-z_][$\w]*)\.model\)\|\|/g)];
+  if (text.split(marker).length !== 2 || lists.length !== 1) {
+    process.stderr.write('custom-model-existing-patch-ambiguous\n');
+    process.exit(2);
+  }
+  let previous;
+  try { previous = JSON.parse(lists[0][1]); } catch { previous = null; }
+  if (!Array.isArray(previous) || !previous.every(value => typeof value === 'string')) {
+    process.stderr.write('custom-model-existing-list-invalid\n');
+    process.exit(2);
+  }
+  if (JSON.stringify(previous) === JSON.stringify(models)) {
+    process.stdout.write('already-patched');
+  } else {
+    const start = lists[0].index + `/*${marker}*/`.length;
+    fs.writeFileSync(file, text.slice(0, start) + JSON.stringify(models) + text.slice(start + lists[0][1].length));
+    process.stdout.write('patched');
+  }
   process.exit(0);
 }
 
