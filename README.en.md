@@ -35,9 +35,10 @@ Do not run it on macOS. A macOS version needs a separate workflow for the Codex 
 - `SKILL.md`: Agent skill entrypoint.
 - `agents/openai.yaml`: Agent configuration.
 - `scripts/repatch-codex-windows.ps1`: Workflow reference script.
+- `-PatchWindows10ScreenshotHelper` on the wrapper or full MSIX patcher: opt in to the hash-guarded staged helper repair after reproducing `SetIsBorderRequired / 0x80004002` on Windows 10. Without this flag, full repairs leave the native helper unchanged; targeted modes reject it.
 - `scripts/patch_codex_fast_mode_windows_msix.ps1`: MSIX / ASAR patch reference implementation.
 - `scripts/patch_codex_fast_mode_windows_msix.ps1 -OnlyComputerUseSurface`: targeted repair for the supported Desktop main-ASAR Darwin-only Computer Use surface gate on Windows. It requires one content-matched bundle and complete unique patch blocks, preserves Darwin behavior and Windows feature flags, skips unrelated Chrome changes, and runs `node --check`; unknown, partial, or duplicate layouts fail closed. Do not combine it with other targeted modes, marketplace registration, or Fast Mode verification.
-- `scripts/test-computer-use-surface-patterns.ps1`: isolated regression coverage for the Windows CUA surface ASAR patcher, including 120 platform/feature cases, idempotency, partial/duplicate rejection, target ambiguity, mode isolation, and ASAR runner fallback. These checks do not replace real Desktop approval and screenshot acceptance.
+- `scripts/test-computer-use-surface-patterns.ps1`: isolated regression coverage for legacy and modern Windows CUA readiness, renamed capability helpers, migration of earlier patches, idempotency, partial/duplicate rejection, target ambiguity, mode isolation, and ASAR runner fallback. These checks do not replace real Desktop approval and screenshot acceptance.
 - `scripts/patch-dynamic-tools-windows-msix.ps1`: Targeted MSIX / ASAR repair for Desktop `dynamicTools` schema drift that causes `missing field inputSchema` on new chat/thread start.
 - `scripts/patch-dynamic-tools-schema.cjs`: Electron bundle patcher used by the dynamicTools MSIX script.
 - `scripts/patch-remote-control-windows-msix.ps1`: Phone remote-control MSIX / ASAR patch and marker verification reference implementation.

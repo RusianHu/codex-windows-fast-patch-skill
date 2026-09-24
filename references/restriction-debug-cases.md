@@ -535,7 +535,9 @@ It starts the plugin's own cua_repl server over stdio with `CUA_REPL_ENABLED_SUR
 Run `test-cua-surface-lock-patterns.ps1` and `python scripts/test-probe-cua-surface.py` for offline regression coverage. Descriptor-only plugin layouts without the required launcher/resources are unsupported and must remain untouched; do not treat that rejection as permission to install optional plugins or repack Desktop.
 - This repair is scoped to the builds it was verified on and to the anchors it records; re-run `-VerifyOnly` after a Desktop update rather than assuming it still applies. The re-application case below covers what to do with each possible report.
 
-## Windows Native App Bindings Are macOS-Only, So The Injected Description Misleads The Model
+## Legacy Windows Native App Bindings Were macOS-Only
+
+Version boundary: this case records the older `@oai/cua` runtime that threw `Native app bindings are unavailable for windows.` on `cua.getApp` and `cua.listApps`. The `@oai/cua 0.2.5` bundled with Desktop `26.917.9434.0` has a Windows branch in `tinysky_alt/create_tinysky_alt.js`. Its documentation and source support `cua.listWindows()`, `cua.listApps()`, and `cua.getApp({ windowId: <real window ID> })`. The string form of `getApp` remains the macOS form. Check the installed runtime before applying this legacy description repair; the current descriptor-only plugin has no `scripts/launch.mjs` target for it. Source inspection establishes API shape, while a fresh Desktop window capture after restoring the ASAR surface gate is still required for runtime acceptance.
 
 Symptoms:
 
@@ -611,6 +613,8 @@ When `-VerifyOnly` reports `unsupported` for a profile, the shipped file changed
 The cache-level repair is preferred over patching Desktop's bundle for the reasons given in the surface lock case; it is the version-agnostic path, and it is the one that a re-run of `-VerifyOnly` keeps honest.
 
 ## Third-Party Config Rewriter Removes Computer Use Features And Plugin Sections
+
+Version boundary: the feature-key loss below records the 2026-09-06 case. On CLI `0.155.0-alpha.16.4`, `codex features list` reports `computer_use` as `stable true`, `js_repl` as `removed false`, and `non_prefixed_mcp_tool_names` as `under development false`. A fresh Desktop `26.917.9434.0` session completed Windows window binding, screenshot, and keyboard input with no explicit `computer_use` key and `js_repl = false`. Restore a missing `unified-computer-use` plugin table when `cua_repl` disappears, but do not restore historical feature keys solely because a config rewriter omitted them.
 
 Symptoms:
 
@@ -773,3 +777,35 @@ Action:
 - Replace the hash in place at the offset the regex capture group reports, keeping the byte length identical. A length change would shift every following PE offset.
 - Run `scripts\test-asar-integrity.ps1 -TemporaryRoot <dir>` after touching any of this. It covers launcher discovery by content, the header-hash algorithm, tamper detection, repair, idempotence, multi-archive tables, read-only launchers, and the loud-failure path. Add `-CheckInstalledPackage` to also assert the installed package is self-consistent.
 - Accept `Desktop actually starts` as the only acceptance criterion for a repack. Patch-marker counts, `service_tier=priority` wire captures, and `install-computer-use-local.ps1 -StrictVerifyOnly` all pass on a package that dies at startup.
+
+## Strict Cache Verification Fails After Unified CUA Removes the Legacy Skill
+
+On Desktop `26.915.4065.0`, a real unified CUA session can enumerate native windows, capture screenshots, and read Chrome and in-app browser tabs while `install-computer-use-local.ps1 -StrictVerifyOnly` fails with `missing:skills\computer-use\SKILL.md`. Desktop's CUA skill reconciliation removes the legacy skill directories when the corresponding `CUA_REPL_ENABLED_SURFACES` entry is enabled. Reinstalling the cache restores a file Desktop will remove again.
+
+The verifier accepts only the complete absence of the legacy `skills\computer-use` directory when the CLI reports exactly one installed, enabled unified Computer Use plugin, its versioned descriptor matches, and its generated MCP manifest enables `js` and the `computer` surface with the current runtime launcher and trusted sky service. A partial skill directory, modified file, missing documentation outside that directory, disabled plugin, stale runtime path, or missing launcher still fails. The native runtime import and browser trust checks still run. Verification never recreates the retired directory.
+
+Run `scripts/test-managed-computer-use-skill.ps1 -TemporaryRoot <temporary-root>` and strict verification after a Desktop session has reconciled the plugins. Validate screenshots and browser tabs through the real Desktop `cua_repl` session separately; a passing cache check alone does not prove those operations.
+
+## Desktop 26.917 Removes The Separate Computer Use Node REPL Flag
+
+The full or surface-only dry run can report `expected exactly one Windows CUA surface-gating target; found 0` even though both Darwin-only gates remain. In Desktop `26.917.6896.0`, `computerUseNodeRepl` is absent from the bundle. Requiring that property during target discovery hides the valid target; adding it back in the Windows expression leaves the computer surface permanently false.
+
+Accept the separate modern layout only when the complete shared readiness predicate is present once. It requires `browserUseTinysky`, a non-WSL runtime, both Node executable paths, `mcpToolExposure`, and an installed, enabled, available unified CUA plugin. The minified capability helper can be renamed: Desktop `26.917.6896.0` uses `n.Gu`, while `26.917.8451.0` and `26.917.9434.0` use `n.Wu`. Match the import/export identifiers structurally in both the finder and embedded patcher without dropping any condition. Preserve that readiness value plus `computerUse` on Windows; preserve the service-app checks on Darwin. Older layouts still require their existing `computerUseNodeRepl` property. Complete previous patches with a missing or stale flag are migrated after verifying the host layout independently of the inserted patch expression. Do not remove readiness checks or rewrite generated `.mcp.json` to compensate.
+
+The surface fixture suite covers 304 modern platform/readiness combinations for the original and renamed helpers, plus the existing 120 legacy combinations, migration, idempotency, corrupt or duplicate readiness anchors, target selection, and unchanged refusal of partial or ambiguous patches. The original contributor validated a full dry-run, signing, installation, real native screenshots, and browser reads on `26.917.6896.0`. The subsequent `n.Wu` compatibility correction was checked against the actual `26.917.9434.0` bundle with syntax and repeat-run validation; this is separate from Desktop installation or screenshot acceptance.
+
+## CUA Requests Time Out After Proxy Variables Are Removed
+
+On Desktop `26.915.4065.0`, native app enumeration can work and Chrome can connect while tab creation or listing fails with `nodeRepl.fetch request failed`. Compare the actual `cua_repl` child process environment with its app-server parent. Checking `codex-computer-use-swift.exe` alone does not test the process that performs the request.
+
+The Node REPL config builder replaces `env_vars` during Desktop reconciliation. A manual edit to the materialized plugin manifest or `config.toml` can therefore disappear on restart. The repair adds the existing standard HTTP/HTTPS/ALL/NO proxy variable names to the Windows native builder, preserving existing entries and deduplicating them. Unset variables, credentials under other names, macOS, Linux, and WSL paths are left unchanged. Proxy values are inherited at launch and are never embedded in the bundle.
+
+Run `scripts/test-node-repl-proxy-env.cjs`, then a full dry run. After installing the updated MSIX from an external executor, verify the real CUA child environment and a controlled browser tab. Restarting only its JavaScript kernel does not restart the MCP process.
+
+## Windows CUA Entry Instructions Use an Unsupported App Name
+
+The current runtime can ship `instructions/windows/computer.md` with the macOS-style `cua.getApp("Example App")` example. Windows requires `cua.listWindows()` followed by `cua.getApp({ windowId })`. `scripts/lib/windows-cua-runtime.ps1` corrects only that exact old text, preserves already-correct instructions, and refuses an unknown shape. The local repair saves the original instructions under the Codex backup directory; full MSIX repair also updates the staged copy. A screenshot acceptance must raise the selected window and compare the visible content with its accessibility tree.
+
+## Signing Certificate Provider Is Missing
+
+A clean Windows PowerShell host can lack the `Cert:` provider even though an existing signing certificate is present. The patcher enumerates `CurrentUser/My` through `X509Store` before invoking certificate creation. It still requires matching subject, a private key, valid expiry, and the code-signing usage. A successful package build must pass signature verification and package inspection before installation.

@@ -27,6 +27,7 @@ param(
   [switch]$Launch,
   [switch]$CleanupWindowsSdkAfterInstall,
   [switch]$VerifyFastModeRequest,
+  [switch]$PatchWindows10ScreenshotHelper,
   [string]$OutputRoot
 )
 
@@ -48,7 +49,7 @@ $json = ($record | ConvertTo-Json -Depth 5) + "`n"
 )
 
 function Invoke-DryRunFixture {
-  param([switch]$KeepBuild)
+  param([switch]$KeepBuild, [switch]$PatchWindows10ScreenshotHelper)
 
   if (Test-Path -LiteralPath $capturePath -PathType Leaf) {
     [System.IO.File]::Delete($capturePath)
@@ -72,6 +73,9 @@ function Invoke-DryRunFixture {
     )
     if ($KeepBuild) {
       $arguments += '-KeepBuild'
+    }
+    if ($PatchWindows10ScreenshotHelper) {
+      $arguments += '-PatchWindows10ScreenshotHelper'
     }
     $output = @(& powershell @arguments 2>&1)
     if ($LASTEXITCODE -ne 0) {
@@ -113,7 +117,7 @@ function Assert-KeySet {
 $defaultCapture = Invoke-DryRunFixture
 Assert-KeySet $defaultCapture `
   -Required @('DryRun', 'ForceRebuild', 'CleanupAfter', 'OutputRoot') `
-  -Forbidden @('InstallPrerequisites', 'Install', 'Launch', 'CleanupWindowsSdkAfterInstall', 'VerifyFastModeRequest')
+  -Forbidden @('InstallPrerequisites', 'Install', 'Launch', 'CleanupWindowsSdkAfterInstall', 'VerifyFastModeRequest', 'PatchWindows10ScreenshotHelper')
 
 $keepCapture = Invoke-DryRunFixture -KeepBuild
 Assert-KeySet $keepCapture `
@@ -121,3 +125,9 @@ Assert-KeySet $keepCapture `
   -Forbidden @('CleanupAfter', 'InstallPrerequisites', 'Install', 'Launch', 'CleanupWindowsSdkAfterInstall', 'VerifyFastModeRequest')
 
 Write-Output "Repatch DryRun cleanup argument forwarding regression passed: $fixtureRoot"
+
+$helperCapture = Invoke-DryRunFixture -PatchWindows10ScreenshotHelper
+Assert-KeySet $helperCapture `
+  -Required @('DryRun', 'ForceRebuild', 'CleanupAfter', 'OutputRoot', 'PatchWindows10ScreenshotHelper') `
+  -Forbidden @('InstallPrerequisites', 'Install', 'Launch')
+Write-Output 'Explicit Windows 10 helper argument forwarding passed'
