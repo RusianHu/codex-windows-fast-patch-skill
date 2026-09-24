@@ -1709,11 +1709,16 @@ const patchedPluginGate = 'if(!r.installed||i==null||a&&(e.platform!==`darwin`&&
 const originalSurfaceGate = 'p=f&&l.platform===`darwin`&&t.computerUse&&u.enabled&&u.paths.serviceAppPath!=null';
 // Desktop 26.917 removes computerUseNodeRepl. Its shared readiness result f
 // already requires the enabled CUA plugin, both Node paths and mcpToolExposure.
-const modernReadiness = 'return t.browserUseTinysky&&!o&&a.nodePath!=null&&a.nodeReplPath!=null&&n.Gu(e,`mcpToolExposure`)&&s?.plugin.installed===!0&&s.plugin.enabled&&s.plugin.availability===`AVAILABLE`';
-const modernLayout = count(modernReadiness) === 1 && !text.includes('computerUseNodeRepl');
-const patchedSurfaceGate = modernLayout
-  ? 'p=f&&t.computerUse&&(l.platform===`darwin`&&u.enabled&&u.paths.serviceAppPath!=null||l.platform===`win32`)'
-  : 'p=f&&(l.platform===`darwin`&&t.computerUse&&u.enabled&&u.paths.serviceAppPath!=null||l.platform===`win32`&&t.computerUse&&t.computerUseNodeRepl)';
+const modernReadinessRe = /return t\.browserUseTinysky&&!o&&a\.nodePath!=null&&a\.nodeReplPath!=null&&[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*\(e,`mcpToolExposure`\)&&s\?\.plugin\.installed===!0&&s\.plugin\.enabled&&s\.plugin\.availability===`AVAILABLE`/g;
+const modernPatchedSurfaceGate = 'p=f&&t.computerUse&&(l.platform===`darwin`&&u.enabled&&u.paths.serviceAppPath!=null||l.platform===`win32`)';
+const legacyPatchedSurfaceGate = 'p=f&&(l.platform===`darwin`&&t.computerUse&&u.enabled&&u.paths.serviceAppPath!=null||l.platform===`win32`&&t.computerUse&&t.computerUseNodeRepl)';
+const unversionedSurfaceGate = 'p=f&&(l.platform===`darwin`&&t.computerUse&&u.enabled&&u.paths.serviceAppPath!=null||l.platform===`win32`&&t.computerUse)';
+const knownSurfaceGates = [modernPatchedSurfaceGate, legacyPatchedSurfaceGate, unversionedSurfaceGate];
+// Do not infer the host layout from a dependency inserted by a previous patch.
+const layoutText = knownSurfaceGates.reduce((source, gate) => source.split(gate).join(''), text);
+const legacyLayout = layoutText.includes('computerUseNodeRepl');
+const modernLayout = !legacyLayout && [...layoutText.matchAll(modernReadinessRe)].length === 1;
+const patchedSurfaceGate = modernLayout ? modernPatchedSurfaceGate : legacyPatchedSurfaceGate;
 
 function count(value, source = text) {
   let total = 0;
@@ -1729,11 +1734,19 @@ const pluginCount = count(originalPluginGate);
 const surfaceCount = count(originalSurfaceGate);
 const markerCount = count(marker);
 const patchedPluginCount = count(patchedPluginGate);
-const patchedSurfaceCount = count(patchedSurfaceGate);
+const existingSurfaceGates = knownSurfaceGates.filter(gate => count(gate) > 0);
+const patchedSurfaceCount = knownSurfaceGates.reduce((total, gate) => total + count(gate), 0);
 if (markerCount || patchedPluginCount || patchedSurfaceCount) {
-  if (markerCount === 1 && patchedPluginCount === 1 && patchedSurfaceCount === 1 &&
-      pluginCount === 0 && surfaceCount === 0) {
-    process.stdout.write('already-patched');
+  if (markerCount === 1 && patchedPluginCount === 1 &&
+      patchedSurfaceCount === 1 && pluginCount === 0 && surfaceCount === 0 &&
+      (legacyLayout || modernLayout)) {
+    const previousGate = existingSurfaceGates[0];
+    if (previousGate === patchedSurfaceGate) {
+      process.stdout.write('already-patched');
+    } else {
+      fs.writeFileSync(file, text.replace(previousGate, patchedSurfaceGate));
+      process.stdout.write('patched');
+    }
     process.exit(0);
   }
   process.stderr.write('incomplete or ambiguous CUA surface patch; refusing to modify the asset\n');
@@ -1741,6 +1754,10 @@ if (markerCount || patchedPluginCount || patchedSurfaceCount) {
 }
 if (pluginCount !== 1 || surfaceCount !== 1) {
   process.stderr.write(`current CUA surface anchors not found exactly once: plugin=${pluginCount} surface=${surfaceCount}\n`);
+  process.exit(2);
+}
+if (!legacyLayout && !modernLayout) {
+  process.stderr.write('unsupported or ambiguous CUA readiness predicate; refusing to modify the asset\n');
   process.exit(2);
 }
 
@@ -2270,11 +2287,12 @@ function Find-ComputerUseSurfaceTarget {
   }
   $candidates = @(foreach ($candidate in (Get-ChildItem -LiteralPath $viteBuildDir -Filter '*.js' -File)) {
     $text = [IO.File]::ReadAllText($candidate.FullName)
+    $modernReadinessPattern = 'return t\.browserUseTinysky&&!o&&a\.nodePath!=null&&a\.nodeReplPath!=null&&[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*\(e,`mcpToolExposure`\)&&s\?\.plugin\.installed===!0&&s\.plugin\.enabled&&s\.plugin\.availability===`AVAILABLE`'
     if ($text.Contains('CODEX_CUA_WINDOWS_SURFACE_V1') -or
         ($text.Contains('CUA_REPL_ENABLED_SURFACES') -and
          $text.Contains('cuaReplSurfaces') -and
          ($text.Contains('computerUseNodeRepl') -or
-          $text.Contains('return t.browserUseTinysky&&!o&&a.nodePath!=null&&a.nodeReplPath!=null&&n.Gu(e,`mcpToolExposure`)&&s?.plugin.installed===!0&&s.plugin.enabled&&s.plugin.availability===`AVAILABLE`')) -and
+          [regex]::Matches($text, $modernReadinessPattern).Count -eq 1) -and
          $text.Contains('serviceAppPath!=null') -and
          $text.Contains('platform===`darwin`'))) {
       $candidate.FullName
