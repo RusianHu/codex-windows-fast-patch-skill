@@ -614,6 +614,8 @@ The cache-level repair is preferred over patching Desktop's bundle for the reaso
 
 ## Third-Party Config Rewriter Removes Computer Use Features And Plugin Sections
 
+Version boundary: the feature-key loss below records the 2026-09-06 case. On CLI `0.155.0-alpha.16.4`, `codex features list` reports `computer_use` as `stable true`, `js_repl` as `removed false`, and `non_prefixed_mcp_tool_names` as `under development false`. A fresh Desktop `26.917.9434.0` session completed Windows window binding, screenshot, and keyboard input with no explicit `computer_use` key and `js_repl = false`. Restore a missing `unified-computer-use` plugin table when `cua_repl` disappears, but do not restore historical feature keys solely because a config rewriter omitted them.
+
 Symptoms:
 
 - Right after an external config-rewriting tool (for example a provider switcher such as CC Switch) rewrote `config.toml` to point at a new model provider, Computer Use stops working in new Desktop conversations.
