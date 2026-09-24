@@ -9,6 +9,7 @@ param(
   [switch]$KeepBuild,
   [switch]$SkipMarketplace,
   [switch]$SkipComputerUse,
+  [switch]$PatchWindows10ScreenshotHelper,
   [switch]$VerifyAllBundledPluginsAvailable,
   [switch]$RegisterMarketplaceOnly,
   [switch]$ForceRebuild,
@@ -489,6 +490,9 @@ if (-not (Test-Path -LiteralPath $PatchScript)) {
 }
 
 $patchArgs = @()
+if ($PatchWindows10ScreenshotHelper) {
+  $patchArgs += '-PatchWindows10ScreenshotHelper'
+}
 if ($DryRun) {
   $patchArgs += '-DryRun'
   $patchArgs += '-ForceRebuild'

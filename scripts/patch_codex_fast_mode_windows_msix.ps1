@@ -16,6 +16,7 @@ param(
   [switch]$VerifyFastModeRequest,
   [switch]$OnlyBundledMarketplaceCopy,
   [switch]$OnlyComputerUseSurface,
+  [switch]$PatchWindows10ScreenshotHelper,
   [Alias('OnlyCustomModels')]
   [switch]$OnlyModelExperience,
   [switch]$DryRun
@@ -44,8 +45,11 @@ function Fail {
 function Assert-ComputerUseSurfaceOptions {
   if ($OnlyComputerUseSurface -and
       ($OnlyBundledMarketplaceCopy -or $OnlyModelExperience -or
-       $AddLocalPluginMarketplace -or $VerifyFastModeRequest)) {
+       $AddLocalPluginMarketplace -or $VerifyFastModeRequest -or $PatchWindows10ScreenshotHelper)) {
     Fail '-OnlyComputerUseSurface cannot be combined with other targeted modes, marketplace registration, or Fast Mode verification'
+  }
+  if ($PatchWindows10ScreenshotHelper -and ($OnlyBundledMarketplaceCopy -or $OnlyModelExperience)) {
+    Fail '-PatchWindows10ScreenshotHelper requires the full repair mode'
   }
 }
 
@@ -3321,7 +3325,8 @@ try {
     $helperPatch = Repair-StagedWindowsComputerUseHelper `
       -HelperPath $stagedHelper `
       -PatcherPath (Join-Path $PSScriptRoot 'patch-computer-use-helper-win10.ps1') `
-      -BackupRoot (Join-Path $tempWork 'helper-backup')
+      -BackupRoot (Join-Path $tempWork 'helper-backup') `
+      -PatchRequested:$PatchWindows10ScreenshotHelper
     Write-Log "staged Windows 10 helper patch result: $helperPatch"
   }
 
