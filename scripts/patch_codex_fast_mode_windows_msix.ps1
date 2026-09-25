@@ -24,6 +24,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\windows-cua-runtime.ps1')
+. (Join-Path $PSScriptRoot 'lib\msix-safe-install.ps1')
 $LogPrefix = '[codex-msix-patch-win]'
 $OutputRootWasExplicit = $PSBoundParameters.ContainsKey('OutputRoot')
 $WindowsSdkBuildToolsPackageId = 'microsoft.windows.sdk.buildtools'
@@ -2787,20 +2788,7 @@ function Install-PatchedPackage {
     [string]$MsixPath,
     [string]$PackageFamilyName
   )
-  $existing = Get-AppxPackage -Name 'OpenAI.Codex' -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($existing) {
-    Stop-CodexDesktopProcesses $existing.InstallLocation
-    Write-Log "removing existing package: $($existing.PackageFullName)"
-    try {
-      Remove-AppxPackage -Package $existing.PackageFullName -PreserveApplicationData -ErrorAction Stop
-    } catch {
-      Write-Log 'PreserveApplicationData is not supported here; retrying normal Remove-AppxPackage'
-      Remove-AppxPackage -Package $existing.PackageFullName -ErrorAction Stop
-    }
-  }
-  Write-Log "installing patched MSIX: $MsixPath"
-  Add-AppxPackage -Path $MsixPath -ErrorAction Stop
-  $installed = Get-AppxPackage -Name 'OpenAI.Codex' -ErrorAction Stop | Select-Object -First 1
+  $installed = Invoke-TransactionalMsixInstall -MsixPath $MsixPath -PackageName $PackageFamilyName
   Write-Log "installed package: $($installed.PackageFullName)"
   if ($Launch -and -not $NoLaunch) {
     $application = @(Get-AppxPackageManifest -Package $installed).Package.Applications.Application | Select-Object -First 1
@@ -3363,6 +3351,8 @@ try {
     $publisher = Get-ManifestPublisher $workPackageRoot
     $cert = Get-OrCreateSigningCertificate $publisher
     Trust-SigningCertificate $cert
+    $updateVersion = Set-MsixUpdateVersion -ManifestPath (Join-Path $workPackageRoot 'AppxManifest.xml')
+    Write-Log "transactional update package version: $updateVersion"
     Invoke-MakeAppxPack $makeappx $workPackageRoot $msixPath
     Invoke-SignPackage $signtool $msixPath $cert
     Write-Log "patched MSIX: $msixPath"
