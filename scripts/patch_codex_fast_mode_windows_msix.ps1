@@ -17,6 +17,7 @@ param(
   [switch]$OnlyBundledMarketplaceCopy,
   [switch]$OnlyComputerUseSurface,
   [switch]$OnlyNodeReplProxyEnv,
+  [switch]$OnlyComputerUseSurfaceAndProxyEnv,
   [switch]$PatchWindows10ScreenshotHelper,
   [switch]$PatchWindowsStoreUpdateFallback,
   [Alias('OnlyCustomModels')]
@@ -46,6 +47,11 @@ function Fail {
 }
 
 function Assert-ComputerUseSurfaceOptions {
+  if ($OnlyComputerUseSurfaceAndProxyEnv -and
+      ($OnlyComputerUseSurface -or $OnlyNodeReplProxyEnv -or $OnlyBundledMarketplaceCopy -or $OnlyModelExperience -or
+       $AddLocalPluginMarketplace -or $VerifyFastModeRequest -or $PatchWindows10ScreenshotHelper -or $PatchWindowsStoreUpdateFallback)) {
+    Fail '-OnlyComputerUseSurfaceAndProxyEnv cannot be combined with other targeted modes, marketplace registration, or unrelated verification/patches'
+  }
   if ($OnlyNodeReplProxyEnv -and
       ($OnlyComputerUseSurface -or $OnlyBundledMarketplaceCopy -or $OnlyModelExperience -or
        $AddLocalPluginMarketplace -or $VerifyFastModeRequest -or $PatchWindows10ScreenshotHelper -or $PatchWindowsStoreUpdateFallback)) {
@@ -2406,7 +2412,8 @@ function Invoke-PatchAppAsar {
   Invoke-NpxAsar 'extract' $asarPath $extractDir
   $patchers = Write-PatcherFiles $WorkDir
 
-  if ($OnlyNodeReplProxyEnv) {
+  $proxyResult = $null
+  if ($OnlyNodeReplProxyEnv -or $OnlyComputerUseSurfaceAndProxyEnv) {
     $viteBuildDir = Join-Path $extractDir '.vite\build'
     $proxyTargets = @(Get-ChildItem -LiteralPath $viteBuildDir -Filter '*.js' -File | Where-Object {
       $content = [IO.File]::ReadAllText($_.FullName)
@@ -2427,18 +2434,20 @@ function Invoke-PatchAppAsar {
     & $nodePath --check $proxyTarget
     if ($LASTEXITCODE -ne 0) { Fail 'Node REPL proxy environment asset failed node --check' }
     Write-Log 'Node REPL proxy environment asset syntax check passed'
-    if ($DryRun) {
+    if ($DryRun -and -not $OnlyComputerUseSurfaceAndProxyEnv) {
       Write-Log 'dry run: proxy environment target validation completed; no package was changed'
       return $false
     }
-    if ($proxyResult -eq 'already-patched') { return $false }
-    Write-Log 'repacking app.asar'
-    Invoke-NpxAsar 'pack' $extractDir $newAsarPath
-    Copy-Item -LiteralPath $newAsarPath -Destination $asarPath -Force
-    return $true
+    if (-not $OnlyComputerUseSurfaceAndProxyEnv) {
+      if ($proxyResult -eq 'already-patched') { return $false }
+      Write-Log 'repacking app.asar'
+      Invoke-NpxAsar 'pack' $extractDir $newAsarPath
+      Copy-Item -LiteralPath $newAsarPath -Destination $asarPath -Force
+      return $true
+    }
   }
 
-  if ($OnlyComputerUseSurface) {
+  if ($OnlyComputerUseSurface -or $OnlyComputerUseSurfaceAndProxyEnv) {
     $computerUseSurfaceTarget = Find-ComputerUseSurfaceTarget $extractDir
 
     Write-Log "Windows CUA surface patch target: $computerUseSurfaceTarget"
@@ -2454,7 +2463,7 @@ function Invoke-PatchAppAsar {
       Write-Log 'dry run: Windows CUA surface target validation completed; no package was changed'
       return $false
     }
-    if ($computerUseSurface -eq 'already-patched') {
+    if ($computerUseSurface -eq 'already-patched' -and $proxyResult -ne 'patched') {
       Write-Log 'asar Windows CUA surface patch already present'
       return $false
     }
@@ -2976,6 +2985,7 @@ function Add-LocalMarketplace {
 function Patch-ChromePluginWindowsRegistryParsing {
   param([string]$WorkApp)
 
+  if ($OnlyComputerUseSurfaceAndProxyEnv) { return 'skipped-targeted-computer-use-surface-and-proxy-env' }
   if ($OnlyNodeReplProxyEnv) { return 'skipped-targeted-node-repl-proxy-env' }
   if ($OnlyComputerUseSurface) {
     return 'skipped-targeted-computer-use-surface'
@@ -3417,7 +3427,7 @@ try {
   Write-Log "Chrome localized registry parsing patch result: $chromeRegistryParsing"
 
   # Validate the runtime inside the package copy before it can enter an MSIX.
-  if (-not ($OnlyBundledMarketplaceCopy -or $OnlyComputerUseSurface -or $OnlyNodeReplProxyEnv -or $OnlyModelExperience)) {
+  if (-not ($OnlyBundledMarketplaceCopy -or $OnlyComputerUseSurface -or $OnlyNodeReplProxyEnv -or $OnlyComputerUseSurfaceAndProxyEnv -or $OnlyModelExperience)) {
     $stagedNodeModules = Join-Path $workApp 'resources\cua_node\bin\node_modules'
     $entryInstructions = Repair-WindowsCuaEntryInstructions -NodeModulesRoot $stagedNodeModules
     Write-Log "Windows CUA entry instructions patch result: $entryInstructions"

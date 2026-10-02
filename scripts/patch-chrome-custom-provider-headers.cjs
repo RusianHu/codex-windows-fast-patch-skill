@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const PROFILES = [
+  { id: '26.930.21537', originalSha256: 'c476237f0818fdcdec971a002211ae165219b2e80b3bad3c0f4035a63fa7a114', policy: 'w_', insertBefore: 'function qD(t){' },
   { id: '26.928.40906', originalSha256: 'ebd5a2f287d1f25270d891c0260a04177f8d9839f96f0ded395da0af254981cc', policy: 'w_', insertBefore: 'function qD(t){' },
   { id: '26.928.31416', originalSha256: '2ff4cdcdcb2c87e5bb63dd6279ed298748aa753bccc57f7623ecd1e034e79a44', policy: 'w_', insertBefore: 'function qD(t){' },
   { id: '26.928.21956', originalSha256: 'da0bce5e1ae47efbc20491c2d7da950cb794919e3fcbf7b93db31a235eee82d1', policy: 'w_', insertBefore: 'function qD(t){' },

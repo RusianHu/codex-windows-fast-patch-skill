@@ -20,6 +20,11 @@ kernel.ReadProcessMemory.restype = w.BOOL
 kernel.IsWow64Process.argtypes = [w.HANDLE, c.POINTER(w.BOOL)]
 kernel.IsWow64Process.restype = w.BOOL
 kernel.CloseHandle.argtypes = [w.HANDLE]
+class MemoryRegion(c.Structure):
+    _fields_ = [('BaseAddress',c.c_void_p),('AllocationBase',c.c_void_p),('AllocationProtect',w.DWORD),
+                ('PartitionId',w.WORD),('RegionSize',c.c_size_t),('State',w.DWORD),('Protect',w.DWORD),('Type',w.DWORD)]
+kernel.VirtualQueryEx.argtypes = [w.HANDLE,c.c_void_p,c.POINTER(MemoryRegion),c.c_size_t]
+kernel.VirtualQueryEx.restype = c.c_size_t
 nt.NtQueryInformationProcess.argtypes = [w.HANDLE, w.ULONG, c.c_void_p, w.ULONG, c.POINTER(w.ULONG)]
 failed = False
 for pid in args.pid:
@@ -38,6 +43,12 @@ for pid in args.pid:
         if status:
             raise RuntimeError(f'NtQueryInformationProcess {status}')
         def read(address, size):
+            region = MemoryRegion()
+            if not kernel.VirtualQueryEx(handle,address,c.byref(region),c.sizeof(region)):
+                raise RuntimeError(f'VirtualQueryEx {c.get_last_error()}')
+            size = min(size, int(region.BaseAddress) + region.RegionSize - address)
+            if size <= 0:
+                raise RuntimeError('No readable bytes in process memory region.')
             buffer = c.create_string_buffer(size)
             got = c.c_size_t()
             kernel.ReadProcessMemory(handle, address, buffer, size, c.byref(got))

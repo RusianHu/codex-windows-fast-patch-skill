@@ -22,3 +22,16 @@ foreach($flag in $flags){
 }
 if((Patch-ChromePluginWindowsRegistryParsing 'no-files-needed') -ne 'skipped-targeted-node-repl-proxy-env'){throw 'Unrelated registry patch was not skipped.'}
 Write-Output 'NODE_REPL_PROXY_TARGETED_MODE_PASSED valid=1 conflicting_options=7 registry_skip=1'
+$OnlyNodeReplProxyEnv=$false
+$OnlyComputerUseSurfaceAndProxyEnv=$true
+$combinedFlags=$flags+@('OnlyNodeReplProxyEnv')
+Assert-ComputerUseSurfaceOptions
+foreach($flag in $combinedFlags){
+    Set-Variable -Name $flag -Value $true
+    $rejected=$false
+    try{Assert-ComputerUseSurfaceOptions}catch{if($_.Exception.Message -match 'OnlyComputerUseSurfaceAndProxyEnv'){$rejected=$true}else{throw}}
+    if(-not $rejected){throw "Unexpected combined-mode acceptance: $flag"}
+    Set-Variable -Name $flag -Value $false
+}
+if((Patch-ChromePluginWindowsRegistryParsing 'no-files-needed') -ne 'skipped-targeted-computer-use-surface-and-proxy-env'){throw 'Combined mode did not skip unrelated registry patch.'}
+Write-Output 'CUA_AND_PROXY_TARGETED_MODE_PASSED valid=1 conflicting_options=8 registry_skip=1'
