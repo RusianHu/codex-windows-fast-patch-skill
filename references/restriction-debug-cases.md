@@ -757,6 +757,7 @@ On plugin `26.917.71314` / CLI `0.155.0-alpha.16.4`, Chrome discovery and sideba
 
 | Service profile | Original SHA-256 | Patched SHA-256 | Acceptance |
 | --- | --- | --- | --- |
+| `26.930.41038` | `07068af5f53237edbb25f41e29991658fb3c3d1bfdadda44a324991f80b9bf82` | `531a4a8cdf81bdbd9c424393154dba6e01ca878d87dc2815b2ecd06102ab695d` | Upstream Desktop `26.930.4958.1`; 53 guard/behavior checks; Chrome and in-app browser navigation and AX reads passed after restart; other hosts require separate acceptance |
 | `26.930.31730` | `925ff1452dfb9b917d96a17ab1d3b792dd492f00050d0b5542bf7e9c1c1b8e55` | `17dba7729c8d48bf3fbad01ba0d7ab883a7d6ee99636210c243b6f2a732bd573` | Desktop `26.930.3930.0` / CLI `0.160.0`; 53 guard/behavior and 41 plugin/runtime cache-scope checks; `.5` proxy/native capture/input accepted; Chrome policy loading remains blocked |
 | `26.930.21537` | `c476237f0818fdcdec971a002211ae165219b2e80b3bad3c0f4035a63fa7a114` | `b4a6fd7e3eece5bef3f255a43064c52910bdaeb995f084e52c522fe08b5ce529` | Desktop `26.930.2377.1`; 53 guard/behavior checks; dedicated Chrome navigation/read/click/keyboard/screenshot accepted |
 | `26.928.21956` | `da0bce5e1ae47efbc20491c2d7da950cb794919e3fcbf7b93db31a235eee82d1` | `fce2fa3e2e2690b5376584c0c84d367eea809c0c0bca55a104d387c5f64c84d2` | Desktop `26.928.2636.0`; 53 offline guard/behavior checks and 41 plugin/runtime cache-scope checks; live Chrome acceptance remains separate |
