@@ -130,6 +130,8 @@ The same visible symptom, such as an unavailable browser or a missing model, may
 
 Here, "reinstallation" is an in-place update that preserves user data, not an uninstall followed by an install. **A reported installation error, or an app that still cannot start after installation finishes, is a failure to investigate, not normal waiting.**
 
+ASAR extraction and packing first reuse a working CLI already installed in the npm cache, without requiring online registry access or cached registry metadata. Only when no usable tool is present does the existing npx/pnpm acquisition path run. A selected tool failure stops the operation rather than retrying a download and hiding an archive error. Non-dry-run builds resolve Windows SDK tools before copying the application tree, so missing packaging dependencies fail before expensive patch work; existing valid SDK caches remain reusable.
+
 ## More help
 
 | Looking for | Documentation |
