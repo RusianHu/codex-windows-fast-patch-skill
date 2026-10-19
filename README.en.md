@@ -35,7 +35,7 @@ This community-maintained **Agent Skill** contains diagnostic workflows and repa
 | Problem | Coverage |
 | --- | --- |
 | **Missing models or speed controls** | Fast Mode, hidden existing model entries, the Power slider, and the Ultra toggle |
-| **UI or plugin issues** | Language resets, missing Goal entries, unavailable marketplaces or install buttons |
+| **UI or plugin issues** | Language resets, missing Goal entries, unavailable marketplaces or install buttons, and client-filtered Image-guided Assets |
 | **Unavailable browser access** | In-app browser, Chrome control, and specific authentication-dependency errors with custom providers |
 | **Computer-control failures** | Computer Use / Any App, cross-call window operations, and some Windows 10 screenshot failures |
 | **Broken phone remote control** | Missing entry points, QR codes, pairing, or expired-version errors while retaining third-party API use |
