@@ -936,6 +936,14 @@ When the root has the required proxy but its native CUA child loses it, run `scr
 
 Run `node scripts/test-node-repl-proxy-env.cjs`, `powershell -NoProfile -File scripts/test-node-repl-proxy-targeted-mode.ps1` and `python -B scripts/test-probe-node-repl-proxy-env.py`. They verify behavior, scope/idempotence/no-write failure paths and synthetic plus task-owned process reads. They do not establish a newly installed Desktop's proxy routing. After a real deployment, verify the CUA child environment and a controlled browser tab. Restarting only its JavaScript kernel does not restart the MCP process.
 
+## Desktop 26.1027 webpack proxy anchor
+
+Store Desktop `26.1027.3384.0` / CLI `0.166.0-alpha.5.1` moves the native Node REPL config builder into `.vite/build/early-bootstrap.js` and emits `"CODEX_WINDOWS_REGISTERED_CORE"` instead of a backtick literal. The surrounding Windows/non-WSL/CLI guards and Set-based allowlist remain equivalent. The previous targeted discovery reports zero targets despite complete live reads showing proxy variables in the Desktop/backend but absent from CUA/Node REPL hosts.
+
+Target discovery and the proxy patcher now accept matching backtick, double-quote or single-quote delimiters while retaining the exact registered-core local binding and unique-anchor checks. Mismatched delimiters, wrong locals, duplicate targets and incomplete markers still fail closed. The resulting patch uses the existing canonical marker and is idempotent. This is a proxy-only compatibility update; the shipped native CUA readiness, installed-plugin guards, updater and model controls remain outside its scope.
+
+The actual Store bundle passed targeted DryRun and syntax validation. Behavior fixtures cover quote equivalence and malformed bindings, and production orchestration fixtures run all three quote styles in Windows PowerShell 5.1 and PowerShell 7. These checks establish preparation compatibility, not installed routing or native screenshot/input acceptance. Recheck fresh child environments and browser operations after deployment. The system-proxy launcher approach in PR #113 addresses a different configuration; it does not replace process-level inheritance when the system proxy is intentionally disabled.
+
 ## Custom stdio MCP Launchers Do Not Inherit The Default Proxy
 
 A dedicated Desktop launcher, a healthy backend `.env`, and the CUA proxy patch can all pass while separately configured stdio MCP servers have no standard proxy variables. A connection filter restricted to `ChatGPT.exe` and `codex.exe` misses their Node launchers and servers. Identify the current Desktop process tree, attribute direct sockets to their actual owners, and use the complete-read environment probe on those processes before diagnosing the fault. A registry-mirror connection is a separate observation from a model API or CUA connection; record it instead of silently excluding it from an MCP-wide claim.
